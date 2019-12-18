@@ -7,20 +7,22 @@ library("gridExtra")
 library("car")
 library("astsa")
 library("xlsx")
-library(ggplot2)
 # Be sure to be in the right Directory
 data <-read.xlsx(file="data_g15.xlsx",sheetIndex = 1)
-
+uniData <-data$X..Viviendas
 # We can see it is a monthly based recording of Subsidised housing approvals as
 # % of totals
 
 #1. Plot the series and briefly comment on the characteristics you observe 
 #(stationarity, trend,seasonality, ...).
-ggplot(data,aes(x=Fecha,y=X..Viviendas)) +
-  geom_point()
-# We can see here the seasonality: There was a great decrease in approvals from
-# 1995 to 2000s
 
+ts1 <-ts(data = uniData)
+stl1 = stl(ts1)
+autoplot(ts1, xlab="Time", ylab="Approval Rate (%)")
+
+Arima1 <- Arima(ts1,order=c(2,1,0),seasonal=list(order=c(0,1,1), period=12))
+# We can see here the seasonality: There was a great decrease in approvals from
+# 1995 to 2000s The global trend is to decrease: from 20% to 13.8%
 
 # 2. Obtain a plot of the decomposition of the series, using stl(). Use an additive decomposition
 # or a multiplicative one, depending on your data. Use the function forecast() to forecast
