@@ -31,7 +31,6 @@ ggAcf(ts1)
 # And Remainder is not white noise. We can see that variance is high during
 # 1992 and 1994 and then the variance is reduced for the rest of the time 
 
-#Arima1 <- Arima(ts1,order=c(2,1,0),seasonal=list(order=c(0,1,1), period=12))
 # We can see here the seasonality: There was a great decrease in approvals from
 # 1995 to 2000s The global trend is to decrease: from 20% to 13.8%
 
@@ -122,22 +121,92 @@ monthplot(tsQ) # Here we can see that a pattern repeats all quarter
 # of the ACF and PACF function, then stop differencing and start modelling. If that
 # pattern doesn't work, then consider rethinking the part where you took differences.
 
+acf(ts1)
+pacf(ts1)
+ndiffs(ts1) # only 1 difference needed to make the time serie stationary
+# We have to say that this is not true empirically... When tested an arima model,
+# we obtained better results for predictions using 0 as d
+nsdiffs(ts1) # no difference required fo a seasonally stationary serie (because it is!)
+adf.test(x = ts1) # Null hypothesis non stationary, obtianed p-value >0.05
+kpssTesting <-kpss.test(x = ts1) # p-value < 0.05, null hypothesis is Stationary
+Arima1model <- Arima(ts1.train,order=c(2,1,0),seasonal=list(order=c(0,1,1), period=12))
+fc1=forecast(Arima1model,h=24)
+plot(fc1)
+accuracy(fc1,ts1.test) #RMSE: Training = 0.6591 Test = 3.6543
 
+Arima2model <- Arima(ts1.train,order=c(2,0.001,0),seasonal=list(order=c(0,0.001,1), period=12))
+fc2=forecast(Arima2model,h=24)
+plot(fc2)
+accuracy(fc2,ts1.test) #RMSE: Training = 0.56737 Test = 1.0609 Better!
+# We tried combinations for both models and the best one is d=0 D=0
+
+# order is composed of p,d,q, seasonal is P,D,Q
+# seasonal 
+#p = the number of autoregressive terms
+#d = the number of non-seasonal differences
+#q = the number of moving-average terms
 
 # d) Identify values for p and q for the regular part and P and Q for the seasonal part.
 # Start with low values and then increase them, one at a time. Fit different models
 # and compare them using AICc and checking the residuals. Check also the correlation
 # between the coefficients of the model.
-# e) Make diagnostic of the residuals for the final model chosen (autocorrelations, zero
-#                                                                 mean, normality). Use plots and tests.
+
+Arima3model <- Arima(ts1.train,order=c(3,0.001,0),seasonal=list(order=c(0.5,0.001,1), period=12))
+fc3=forecast(Arima3model,h=24)
+plot(fc3)
+accuracy(fc3,ts1.test) #RMSE: Training = 0.545 Test = 1.047 Better!
+
+#optimal (p,P) empirically found are 3 and 0.5
+
+Arima4model <- Arima(ts1.train,order=c(3,0.001,10),seasonal=list(order=c(0.5,0.001,1), period=12))
+fc4=forecast(Arima4model,h=24)
+plot(fc4)
+accuracy(fc4,ts1.test) #RMSE: Training = 0.48447 Test = 0.3567 Better!
+
+#optimal (q,Q) empirically found are 10 and 1 respectively
+
+# e) Make diagnostic of the residuals for the final model chosen (autocorrelations, zero meanm normality)
+#  Use plots and tests.
+                    
+t.test(residuals(Arima4model)) # p-value is > 0.05 then true mean ==0
+checkresiduals(Arima4model)# Here we can see nicely that residuals are mean 0 and normal variance
+acf2(Arima4model$residuals)
+
 # f ) Once you have found a suitable model, repeating the fitting model process several
 # times if necessary, use it to make forecasts. Plot them.
+
+# We have done so previously! Lets try some blind predicion!
+Arima5model <- Arima(ts1,order=c(3,0.001,10),seasonal=list(order=c(0.5,0.001,1), period=12))
+fc5=forecast(Arima5model,h=24)
+plot(fc5)
+# these results seems reasonable, still there are no way to check accuracy from our dataset.
 # g) Use the function getrmse to compute the test set RMSE of some of the models you
 # have already fiited. Which is the one minimizing it? Use the last year of observations
 # (12 observations for monthly data, 4 observations for quarterly data) as the test set.
-# 1
+
+# We have done this before
+getrmse(Arima5model)
+getrmse(Arima4model)
+# Not working
 # h) You can also use the auto.arima() function with some of its parameters fixed, to
 # see if it suggests a better model that the one you have found. Don't trust blindly
 # its output. Automatic found models aren't based on an analysis of residuals but in
 # comparing some other measures like AIC. Depending on how complex the data set
 # is, they may find models with high values for p, q, P or Q (greater than 2).
+
+ts1.auto=auto.arima(ts1.train)
+ts1.auto
+tsdiag(ts1.auto)
+fc6=forecast(ts1.auto,h=24)
+plot(fc6)
+accuracy(fc6,ts1.test)
+# This automated model is worse in the RMSE than the one manually tuned, since
+# It is tuned based on other parameters like Akaike's information cryterion,
+# instead on the residuals
+
+Box.test(ts1.auto$residuals,12, fitdf=1)
+t.test(ts1.auto$residuals)
+jarque.bera.test(ts1.auto$residuals[-c(49,72,73,37,77)])
+
+# The spectrum of the residuals:s
+tsdisplay(ts1.auto$residuals, plot.type="spectrum")
