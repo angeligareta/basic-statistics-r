@@ -1,3 +1,4 @@
+# Library imports ----
 library("tseries")
 library("ggplot2")
 library("forecast")
@@ -7,33 +8,46 @@ library("gridExtra")
 library("car")
 library("astsa")
 library("xlsx")
+library("fUnitRoots")
 
-# Be sure to be in the right Directory
-data <- read.xlsx(file = "../dataset/data_g15.xlsx", sheetIndex = 1)
-uni_data <- data$X.Viviendas
-# We can see it is a monthly based recording of Subsidised housing approvals as
-# % of totals
+# Read data and convert to time series ----
+## Data => Monthly based recording of Subsidised housing approvals as
+## % of totals from January 1990 to December 2007.
+data <- read.xlsx(file = "./dataset/data_g15.xlsx", sheetIndex = 1)
+subsidised_house_approvals <- data[, 2]
+time_series <- ts(subsidised_house_approvals, frequency = 12, start = c(1990, 1))
 
-#1. Plot the series and briefly comment on the characteristics you observe 
-#(stationarity, trend,seasonality, ...).
-ts1 <- ts(data[, 2], frequency = 12, start = c(1990, 1))
+# 1. Plot the series and briefly comment on the characteristics you observe
+# (stationarity, trend, seasonality, ...) ----
 
-autoplot(ts1, xlab = "Time", ylab = "Approval Rate (%)")
-spec.pgram(ts1)
-ggmonthplot(ts1)
-ggseasonplot(ts1)
+## Plot observed time series
+autoplot(time_series, xlab = "Time", ylab = "Approval Rate (%)")
+
+## Decompose time series. Show (trend and seasonality)
+plot(decompose(time_series))
+
+## Plot seasonality per month and year
+ggmonthplot(time_series)
+ggseasonplot(time_series)
+
+## ?
+spec.pgram(time_series)
 
 # Exploring correlations of lagged observations
-gglagplot(ts1, lag = 12, do.lines = FALSE)
-ggAcf(ts1)
+gglagplot(time_series, lag = 12, do.lines = FALSE)
+ggAcf(time_series)
 
 # We can extract the following conclusions:
-# Data is strongly seasonal, There is a decreasing in the trend
-# And Remainder is not white noise. We can see that variance is high during
-# 1992 and 1994 and then the variance is reduced for the rest of the time 
+## With respect of the trend: There is a decrease from 1994 to 2000 and an increase
+## from 2000 to 2004. The global trend is to decrease: from 20% to 13.8%
 
-# We can see here the seasonality: There was a great decrease in approvals from
-# 1995 to 2000s The global trend is to decrease: from 20% to 13.8%
+## With respect of the seasonality the data is strongly seasonal according to the ggmonthplot.
+## Besides, looking to the gglagplot we see the data is strongly correlated to the previous season
+
+## Stationarity:
+
+# And Remainder is not white noise. We can see that variance is high during
+# 1992 and 1994 and then the variance is reduced for the rest of the time
 
 # 2. Obtain a plot of the decomposition of the series, using stl(). Use an additive decomposition
 # or a multiplicative one, depending on your data. Use the function forecast() to forecast
@@ -43,12 +57,12 @@ ggAcf(ts1)
 # identically distributed variables, with zero mean and constant variance. Answer to this
 # point just visually or plot the ACF and PACF of the remainder part.
 
-stl1 <- stl(ts1, s.window = "periodic", robust = TRUE)
+stl1 <- stl(time_series, s.window = "periodic", robust = TRUE)
 plot(stl1)
 
 #We split our model in 2: Train and Test
-ts1.train <- window(ts1, end = 2003 - 0.001)
-ts1.test <- window(ts1, start = 2003)
+ts1.train <- window(time_series, end = 2003 - 0.001)
+ts1.test <- window(time_series, start = 2003)
 
 #Lets check if the model is multiplicative or additive
 ts1.mult = hw(ts1.train, seasonal = "multiplicative")
@@ -103,11 +117,11 @@ model.1 = Arima(unemp.ts, order = c(2, 1, 0), seasonal = list(order = c(0, 1, 1)
 # (package forecast) or monthplot (built-in function).
 
 # The answer is yes, because diagrams showed us a great seasonal component.
-tsdisplay(ts1, plot.type = "spectrum") # We can see that the signal has periodic components
+tsdisplay(time_series, plot.type = "spectrum") # We can see that the signal has periodic components
 # from the peaks in the espectrum at 2.5, 3.5, 4.5, etc.
-acf(ts1) # this doesn't help a lot...
-seasonplot(ts1) #Here is hard to see significative months...
-monthplot(ts1) #Here we can clearly see the cycles within months
+acf(time_series) # this doesn't help a lot...
+seasonplot(time_series) #Here is hard to see significative months...
+monthplot(time_series) #Here we can clearly see the cycles within months
 
 tsQ <- ts(data[, 2], frequency = 4, start = c(1990, 1)) #we build this for quarterly data
 seasonplot(tsQ)
@@ -122,14 +136,14 @@ monthplot(tsQ) # Here we can see that a pattern repeats all quarter
 # of the ACF and PACF function, then stop differencing and start modelling. If that
 # pattern doesn't work, then consider rethinking the part where you took differences.
 
-acf(ts1)
-pacf(ts1)
-ndiffs(ts1) # only 1 difference needed to make the time serie stationary
+acf(time_series)
+pacf(time_series)
+ndiffs(time_series) # only 1 difference needed to make the time serie stationary
 # We have to say that this is not true empirically... When tested an arima model,
 # we obtained better results for predictions using 0 as d
-nsdiffs(ts1) # no difference required fo a seasonally stationary serie (because it is!)
-adf.test(x = ts1) # Null hypothesis non stationary, obtianed p-value >0.05
-kpssTesting <- kpss.test(x = ts1) # p-value < 0.05, null hypothesis is Stationary
+nsdiffs(time_series) # no difference required fo a seasonally stationary serie (because it is!)
+adf.test(x = time_series) # Null hypothesis non stationary, obtianed p-value >0.05
+kpssTesting <- kpss.test(x = time_series) # p-value < 0.05, null hypothesis is Stationary
 Arima1model <- Arima(ts1.train, order = c(2, 1, 0), seasonal = list(order = c(0, 1, 1), period = 12))
 fc1 = forecast(Arima1model, h = 24)
 plot(fc1)
@@ -177,7 +191,7 @@ acf2(Arima4model$residuals)
 # times if necessary, use it to make forecasts. Plot them.
 
 # We have done so previously! Lets try some blind predicion!
-Arima5model <- Arima(ts1, order = c(3, 0.001, 10), seasonal = list(order = c(0.5, 0.001, 1), period = 12))
+Arima5model <- Arima(time_series, order = c(3, 0.001, 10), seasonal = list(order = c(0.5, 0.001, 1), period = 12))
 fc5 = forecast(Arima5model, h = 24)
 plot(fc5)
 # these results seems reasonable, still there are no way to check accuracy from our dataset.
