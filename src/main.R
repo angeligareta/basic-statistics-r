@@ -23,31 +23,36 @@ time_series <- ts(subsidised_house_approvals, frequency = 12, start = c(1990, 1)
 ## Plot observed time series
 autoplot(time_series, xlab = "Time", ylab = "Approval Rate (%)")
 
-## Decompose time series. Show (trend and seasonality)
-plot(decompose(time_series))
-
-## Plot seasonality per month and year
-ggmonthplot(time_series)
-ggseasonplot(time_series)
-
-## ?
-spec.pgram(time_series)
-
-# Exploring correlations of lagged observations
-gglagplot(time_series, lag = 12, do.lines = FALSE)
-ggAcf(time_series)
-
-# We can extract the following conclusions:
 ## With respect of the trend: There is a decrease from 1994 to 2000 and an increase
 ## from 2000 to 2004. The global trend is to decrease: from 20% to 13.8%
+### Decompose time series. Show (trend and seasonality)
+plot(decompose(time_series))
 
 ## With respect of the seasonality the data is strongly seasonal according to the ggmonthplot.
 ## Besides, looking to the gglagplot we see the data is strongly correlated to the previous season
+### Plot seasonality per month and year
+ggmonthplot(time_series)
+ggseasonplot(time_series)
 
-## Stationarity:
+### Exploring correlations of lagged observations
+gglagplot(time_series, lag = 12, do.lines = FALSE)
+ggAcf(time_series)
 
-# And Remainder is not white noise. We can see that variance is high during
-# 1992 and 1994 and then the variance is reduced for the rest of the time
+## Stationarity: We can see that it is not stationary because of the trend, making the mean and the
+## variance change over time. However, to statiistically prove it, we performed the Augmented
+## Dickey-Fuller Test and the resulting p-value was of 0.41, confirming the time series is not
+## stationary
+### Augmented Dickey-Fuller Test => test if x is a non-stationary time series
+adf.test(time_series)
+
+# With respect of the randomm part it does not seem as white noise.
+# We can see that variance is high during 1992 and 1994 and then it is reduced
+# for the rest of the time, so it doesnt match with the white nose properties
+# of constant variance and mean.
+plot(decompose(time_series))
+
+## ?
+spec.pgram(time_series)
 
 # 2. Obtain a plot of the decomposition of the series, using stl(). Use an additive decomposition
 # or a multiplicative one, depending on your data. Use the function forecast() to forecast
@@ -56,6 +61,9 @@ ggAcf(time_series)
 # the remainder look like a white noise to you? White noise is just a group of independent,
 # identically distributed variables, with zero mean and constant variance. Answer to this
 # point just visually or plot the ACF and PACF of the remainder part.
+
+## ndiffs() is used to determine the number of first differences required to make the time series non-seasonal
+ndiffs(time_series)
 
 stl1 <- stl(time_series, s.window = "periodic", robust = TRUE)
 plot(stl1)
