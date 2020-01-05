@@ -9,6 +9,7 @@ library("car")
 library("astsa")
 library("xlsx")
 library("fUnitRoots")
+library("MTS")
 
 # Read data and convert to time series ----
 ## Data => Monthly based recording of Subsidised housing approvals as
@@ -16,6 +17,7 @@ library("fUnitRoots")
 data <- read.xlsx(file = "./dataset/data_g15.xlsx", sheetIndex = 1)
 subsidised_house_approvals <- data[, 2]
 time_series <- ts(subsidised_house_approvals, frequency = 12, start = c(1990, 1))
+log_time_series <- log(time_series)
 
 # 1. Plot the series and briefly comment on the characteristics you observe
 # (stationarity, trend, seasonality, ...) ----
@@ -56,65 +58,114 @@ spec.pgram(time_series)
 
 # 2. Obtain a plot of the decomposition of the series, using stl(). Use an additive decomposition
 # or a multiplicative one, depending on your data. Use the function forecast() to forecast
-# future values. Multiplicative decomposition is useful when the logarithmic transformation
-# makes a difference in the appearance of your series and shows more constant variance. Does
-# the remainder look like a white noise to you? White noise is just a group of independent,
+# future values.
+#
+# Multiplicative decomposition is useful when the logarithmic transformation
+# makes a difference in the appearance of your series and shows more constant variance.
+## Decompose the series
+stl1 <- stl(time_series, s.window = "periodic", robust = TRUE)
+stl1_multiplicative <- stl(log_time_series, s.window = "periodic", robust = TRUE)
+
+plot(stl1)
+## We use log to be able to show multiplicative decomposition: https://otexts.com/fpp2/components.html
+## The remainder is much better! It seems to have constant variance and mean
+## Now back-transform the data with exp
+
+## Compare individual plots
+autoplot(stl1$time.series[, "seasonal"])
+autoplot(exp(stl1_multiplicative$time.series[, "seasonal"]))
+
+autoplot(stl1$time.series[, "trend"])
+autoplot(exp(stl1_multiplicative$time.series[, "trend"]))
+
+autoplot(stl1$time.series[, "remainder"])
+autoplot(exp(stl1_multiplicative$time.series[, "remainder"]))
+
+## Check variance for residuals for both decompositions. Both are stationary
+adf.test(stl1$time.series[, "remainder"])
+adf.test(stl1_multiplicative$time.series[, "remainder"])
+
+## Make a forecast with both decompositions and compare the errors
+# We split our model in 2: Train and Test ( Approx 80-20%, 17 years (13, 4) )
+train_end <- time(time_series)[length(time_series) - 48]   #train data end
+test_start <- time(time_series)[length(time_series) - 48 + 1]  #test data start
+time_series_train_split <- window(time_series, end = train_end)
+time_series_test_split <- window(time_series, start = test_start)
+
+### Using hew
+# Lets check if the model is multiplicative or additive
+ts1_mult <- hw(time_series_train_split, seasonal = "multiplicative")
+ts1_add <- hw(time_series_train_split, seasonal = "additive")
+# Using hw, the additive time series has the lowest rms, but if we chhange the training
+# percentage the multiplicative is higher in other ones
+accuracy(ts1_mult, time_series_test_split)
+accuracy(ts1_add, time_series_test_split)
+
+# Forecasting with stl(): different methods: naive, ets, arima, rwdrift
+stl1_forecast <- forecast(stl1, method = "arima", h = 48) # arima is the one selcted
+plot(stl1_forecast)
+
+stl1_forecast_multiplicative <- forecast(stl1_multiplicative, method = "arima", h = 48) # arima is the one selcted
+plot(stl1_forecast_multiplicative)
+
+## ?
+# ggAcf(residuals(ts1_mult)) #Here we can see that resuduals are much higher for mult serie
+# ggAcf(residuals(ts1_add))
+
+## ?
+## ETS => Exponential Smoothing State Space Model
+## If you don't specify anything, the ets() function looks for the model with lowest AIC (Akaike's
+## information criteria).
+# ts1_ets <- ets(ts1_train)
+# summary(ts1_ets)
+# autoplot(ts1_ets)
+
+# Does the remainder look like a white noise to you? White noise is just a group of independent,
 # identically distributed variables, with zero mean and constant variance. Answer to this
 # point just visually or plot the ACF and PACF of the remainder part.
 
-## ndiffs() is used to determine the number of first differences required to make the time series non-seasonal
-ndiffs(time_series)
+## The remainder using additive decomposition does not look like white noise visually
+## and we will check neither statistically
+remainder <- stl1$time.series[, "remainder"]
+autoplot(remainder)
 
-stl1 <- stl(time_series, s.window = "periodic", robust = TRUE)
-plot(stl1)
+## The remainder using multiplicative decomposition look like white noise visually
+## and statistically
+remainder_multiplicative <- exp(stl1_multiplicative$time.series[, "remainder"])
+autoplot(remainder_multiplicative)
 
-#We split our model in 2: Train and Test
-ts1.train <- window(time_series, end = 2003 - 0.001)
-ts1.test <- window(time_series, start = 2003)
+## Compare variance
+var(remainder) # 0.75
+var(remainder_multiplicative) # Almost 0
 
-#Lets check if the model is multiplicative or additive
-ts1.mult = hw(ts1.train, seasonal = "multiplicative")
-ts1.add = hw(ts1.train, seasonal = "additive")
+## Compare acf and pacf
+acf(remainder, 30)
+pacf(remainder, 30)
 
-accuracy(ts1.mult, ts1.test)
-accuracy(ts1.add, ts1.test) # Bingo! Our time serie is additive (The RMS is the lowest)
-ggAcf(residuals(ts1.add))
-ggAcf(residuals(ts1.mult)) #Here we can see that resuduals are much higher for mult serie
+## We can see that the multiplicative have lower correlation in acf
+acf(remainder_multiplicative, 30)
+pacf(remainder_multiplicative, 30)
 
-ts1.ets = ets(ts1.train)
-# If you don't specify anything, the ets() function looks for the model with lowest AIC (Akaike's
-# information criteria).
-summary(ts1.ets)
-autoplot(ts1.ets)
-
-trend = stl1$time.series[, 2]
-autoplot(trend) #Here we can see the trend
-seasonal = stl1$time.series[, 1]
-autoplot(seasonal) #Here we can see the seasonal component
-remainder = stl1$time.series[, 3]
-autoplot(remainder) #Here we can see the remainder
-mean(remainder) #Its mean is close to 0, but we can visually check that variance is not
-acf(remainder)
-pacf(remainder)
-#forecasting with stl(): different methods: naive, ets, arima, rwdrift
-stl1.f = forecast(stl1, method = "arima", h = 48) #arima is the one selcted
-plot(stl1.f)
+archTest(remainder)
+archTest(remainder_multiplicative)
 
 # 3. Fit an ARIMA model to your time series. Some steps to follow:
-#   a) Decide on whether to work with your original variable or with the log transform
+# a) Decide on whether to work with your original variable or with the log transform
 # one (use plot and tsdisplay of both variables, the transformed one and the original
-#      one). Remember that logarithmic transformation is useful to stabilize the variance.
+# one). Remember that logarithmic transformation is useful to stabilize the variance.
 # If both plots look almost the same to you, just use the original data.
+plot(time_series)
+plot(log_time_series)
 
-logUniData <- log(uni_data)
-plot(logUniData)
-plot(uni_data)
-tsdisplay(logUniData)
-tsdisplay(uni_data)
 # Both models look almost the same, there is no significative difference in ACF
 # nor PACF
-model.1 = Arima(unemp.ts, order = c(2, 1, 0), seasonal = list(order = c(0, 1, 1), period = 12))
+tsdisplay(time_series)
+tsdisplay(log_time_series)
 
+acf(time_series)
+acf(log_time_series)
+
+# model_1 <- Arima(time_series, order = c(2, 1, 0), seasonal = list(order = c(0, 1, 1), period = 12))
 
 # b) Are you going to consider a seasonal component? If the answer is yes, identify s. You
 # can use the periodogram (function tsdisplay with parameter "plot.type=spectrum"),
@@ -131,10 +182,11 @@ acf(time_series) # this doesn't help a lot...
 seasonplot(time_series) #Here is hard to see significative months...
 monthplot(time_series) #Here we can clearly see the cycles within months
 
-tsQ <- ts(data[, 2], frequency = 4, start = c(1990, 1)) #we build this for quarterly data
-seasonplot(tsQ)
-monthplot(tsQ) # Here we can see that a pattern repeats all quarter
-# we should add a monthly component and a quarter component
+time_series_quaterly <- ts(data[, 2], frequency = 4, start = c(1990, 1)) #we build this for quarterly data
+seasonplot(time_series_quaterly)
+monthplot(time_series_quaterly) # Here we can see that a pattern repeats all quarter
+
+# We should try with s = 4 and 12
 
 # c) Decide on the values of d and D to make your series stationary. D values are not
 # usually greater than 1. You can use the standard deviation procedure and stationary
@@ -146,22 +198,47 @@ monthplot(tsQ) # Here we can see that a pattern repeats all quarter
 
 acf(time_series)
 pacf(time_series)
+
 ndiffs(time_series) # only 1 difference needed to make the time serie stationary
 # We have to say that this is not true empirically... When tested an arima model,
 # we obtained better results for predictions using 0 as d
-nsdiffs(time_series) # no difference required fo a seasonally stationary serie (because it is!)
-adf.test(x = time_series) # Null hypothesis non stationary, obtianed p-value >0.05
-kpssTesting <- kpss.test(x = time_series) # p-value < 0.05, null hypothesis is Stationary
-Arima1model <- Arima(ts1.train, order = c(2, 1, 0), seasonal = list(order = c(0, 1, 1), period = 12))
-fc1 = forecast(Arima1model, h = 24)
-plot(fc1)
-accuracy(fc1, ts1.test) #RMSE: Training = 0.6591 Test = 3.6543
 
-Arima2model <- Arima(ts1.train, order = c(2, 0.001, 0), seasonal = list(order = c(0, 0.001, 1), period = 12))
-fc2 = forecast(Arima2model, h = 24)
-plot(fc2)
-accuracy(fc2, ts1.test) #RMSE: Training = 0.56737 Test = 1.0609 Better!
-# We tried combinations for both models and the best one is d=0 D=0
+nsdiffs(time_series) # no difference required fo a seasonally stationary serie (because it is!)
+
+adf.test(x = time_series) # Null hypothesis non stationary, obtianed p-value >0.05
+kpss.test(x = time_series) # p-value < 0.05, null hypothesis is Stationary
+
+time_series_stationary <- diff(time_series, differences = 1)
+
+# With one diff pass both test
+adf.test(x = time_series_stationary) # Null hypothesis non stationary, obtianed p-value >0.05
+kpss.test(x = time_series_stationary) # p-value < 0.05, null hypothesis is Stationary
+
+# ACF improved a lot
+acf(time_series_stationary)
+plot(time_series_stationary)
+
+# With d = 1, we obtain a stationary data, so we do not need a higher d.
+
+## For seasonal differences D, we will use D = 0, as the sd is lower with only the d = 1.
+## Besides the acf are very alike
+sd(time_series_stationary)
+sd(diff(diff(time_series, 12)))
+
+acf(time_series_stationary)
+acf(diff(diff(time_series, 12)))
+
+## ? I would not select which d to choose based on arima models. We have to demonstrate it statistically
+arima_model_1 <- Arima(time_series_train_split, order = c(2, 1, 0), seasonal = list(order = c(1, 0, 0), period = 12))
+forecast_arima_model_1 <- forecast(arima_model_1, h = 24)
+plot(forecast_arima_model_1)
+accuracy(forecast_arima_model_1, time_series_test_split) #RMSE: Training = 0.5393376 Test = 1.8357907 Better!
+
+arima_model_2 <- Arima(time_series_train_split, order = c(2, 0.0000001, 0), seasonal = list(order = c(1, 0, 0), period = 12))
+forecast_arima_model_2 <- forecast(arima_model_2, h = 24)
+plot(forecast_arima_model_2)
+accuracy(forecast_arima_model_2, time_series_test_split) #RMSE: Training = 0.5505118 Test = 2.1285549
+# We tried combinations for both models and the best one is d=1 D=0
 
 # order is composed of p,d,q, seasonal is P,D,Q
 # seasonal 
@@ -174,62 +251,140 @@ accuracy(fc2, ts1.test) #RMSE: Training = 0.56737 Test = 1.0609 Better!
 # and compare them using AICc and checking the residuals. Check also the correlation
 # between the coefficients of the model.
 
-Arima3model <- Arima(ts1.train, order = c(3, 0.001, 0), seasonal = list(order = c(0.5, 0.001, 1), period = 12))
-fc3 = forecast(Arima3model, h = 24)
-plot(fc3)
-accuracy(fc3, ts1.test) #RMSE: Training = 0.545 Test = 1.047 Better!
+arima_model_3 <- Arima(time_series_train_split, order = c(3, 1, 0), seasonal = list(order = c(0.5, 0, 1), period = 12))
+forecast_arima_model_3 <- forecast(arima_model_3, h = 24)
+plot(forecast_arima_model_3)
+accuracy(forecast_arima_model_3, time_series_test_split) #RMSE: Training = 0.545 Test = 1.047 Better!
 
-#optimal (p,P) empirically found are 3 and 0.5
+# optimal (p, P) empirically found are 3 and 0.5
 
-Arima4model <- Arima(ts1.train, order = c(3, 0.001, 10), seasonal = list(order = c(0.5, 0.001, 1), period = 12))
-fc4 = forecast(Arima4model, h = 24)
-plot(fc4)
-accuracy(fc4, ts1.test) #RMSE: Training = 0.48447 Test = 0.3567 Better!
+arima_model_4 <- Arima(time_series_train_split, order = c(3, 1, 10), seasonal = list(order = c(0.5, 0, 1), period = 12))
+forecast_arima_model_4 <- forecast(arima_model_4, h = 24)
+plot(forecast_arima_model_4)
+accuracy(forecast_arima_model_4, time_series_test_split) #RMSE: Training = 0.48447 Test = 2.2173172 Better!
 
-#optimal (q,Q) empirically found are 10 and 1 respectively
+# optimal (q, Q) empirically found are 10 and 1 respectively
+
+## Made a function to automatically permutate and obtained best configuration:
+getrmse <- function(x, h, ...)
+  {
+  train_end <- time(x)[length(x) - h]   #train data end
+  test_start <- time(x)[length(x) - h + 1]  #test data start
+  train <- window(x, end = train_end) #extract train data
+  test <- window(x, start = test_start)  #extract test data
+  fit <- Arima(train, ...) # fit model with train data
+  fc <- forecast(fit, h = h) # forecast with model
+  return(accuracy(fc, test)[2, "RMSE"]) #compare forecast with test data, extract the rmse
+}
+
+# We have done this before
+best_combination <- ""
+best_combination_rmse <- 100000
+
+permutate_get_rmse <- function(data, p_arr, P_arr, q_arr, Q_arr) {
+  for (p in p_arr) {
+    for (P in P_arr) {
+      for (q in q_arr) {
+        for (Q in Q_arr) {
+          combination <- paste("RMSE of p = ", p, " P = ", P, " q = ", q, "Q = ", Q)
+          rmse <- getrmse(data, h = 12, order = c(p, 1, q), seasonal = list(order = c(P, 0, Q), period = 12))
+          print(paste(combination, " = ", rmse))
+
+          ## Save best combination
+          if (rmse < best_combination_rmse) {
+            assign("best_combination", combination, envir = .GlobalEnv)
+            assign("best_combination_rmse", rmse, envir = .GlobalEnv)
+          }
+        }
+      }
+    }
+  }
+
+  print(paste("BEST COMBINATION => ", best_combination, " = ", best_combination_rmse))
+  best_combination_rmse
+}
+
+## Permutate values p, q, P and Q
+best_rmse <- permutate_get_rmse(data = time_series, p_arr = seq(0, 3), q_arr = seq(0, 3), P_arr = seq(0, 3), Q_arr = seq(0, 3))
+## Best combination for raw time series => "RMSE of p =  1  P =  3  q =  0 Q =  1 " => 0.201915547276868
+
+best_rmse_log <- permutate_get_rmse(data = log(time_series), p_arr = seq(0, 3), q_arr = seq(0, 3), P_arr = seq(0, 3), Q_arr = seq(0, 3))
+## Best combination: "RMSE of p =  1  P =  1  q =  1 Q =  0" => 0.01644351
+
+final_model <- Arima(time_series_train_split, order = c(1, 1, 0), seasonal = list(order = c(3, 0, 1), period = 12))
+final_model_log <- Arima(log(time_series_train_split), order = c(1, 1, 1), seasonal = list(order = c(1, 0, 0), period = 12))
+
+forecast_final_model <- forecast(final_model, h = 12)
+forecast_final_model_log <- forecast(final_model_log, h = 12)
+
+accuracy(forecast_final_model, time_series_test_split)
+accuracy(forecast_final_model_log, log(time_series_test_split))
+
+forecast_final_model_rmse <- getrmse(time_series, h = 12, order = c(1, 1, 0), seasonal = list(order = c(3, 0, 1), period = 12))
+forecast_final_model_log_rmse <- getrmse(log(time_series), h = 12, order = c(1, 1, 1), seasonal = list(order = c(1, 0, 0), period = 12))
+
+forecast_final_model_rmse
+forecast_final_model_log_rmse
 
 # e) Make diagnostic of the residuals for the final model chosen (autocorrelations, zero meanm normality)
 #  Use plots and tests.
+final_model_log_residuals_transformed <- exp(final_model_log$residuals)
+plot(final_model$residuals)
+plot(final_model_log_residuals_transformed)
 
-t.test(residuals(Arima4model)) # p-value is > 0.05 then true mean ==0
-checkresiduals(Arima4model) # Here we can see nicely that residuals are mean 0 and normal variance
-acf2(Arima4model$residuals)
+t.test(final_model$residuals) # p-value is <>> 0.05 => true mean != 0
+t.test(final_model_log_residuals_transformed) # p-value is > 0.05 =>  true mean == 0
+
+Box.test(final_model$residuals, lag = 20, fitdf = 5, type = "L")
+Box.test(final_model_log_residuals_transformed, lag = 20, fitdf = 5, type = "L")
+
+checkresiduals(final_model) # Here we can see nicely that residuals are mean 0 and normal variance
+
+final_model_log_temp <- final_model_log
+final_model_log_temp$residuals <- exp(final_model_log_temp$residuals)
+checkresiduals(final_model_log_temp)
+
+acf2(final_model$residuals)
+acf2(final_model_log_residuals_transformed) # Much less correlation in acf
 
 # f ) Once you have found a suitable model, repeating the fitting model process several
 # times if necessary, use it to make forecasts. Plot them.
 
-# We have done so previously! Lets try some blind predicion!
-Arima5model <- Arima(time_series, order = c(3, 0.001, 10), seasonal = list(order = c(0.5, 0.001, 1), period = 12))
-fc5 = forecast(Arima5model, h = 24)
-plot(fc5)
-# these results seems reasonable, still there are no way to check accuracy from our dataset.
+plot(forecast_final_model)
+plot(ts(subsidised_house_approvals, frequency = 12, start = c(1990, 1), end = c(2005, 1)))
+
+## Real log
+plot(forecast_final_model_log)
+plot(ts(log(subsidised_house_approvals), frequency = 12, start = c(1990, 1), end = c(2005, 1)))
+
 # g) Use the function getrmse to compute the test set RMSE of some of the models you
 # have already fiited. Which is the one minimizing it? Use the last year of observations
 # (12 observations for monthly data, 4 observations for quarterly data) as the test set.
+## Util taken from teacher
 
-# We have done this before
-getrmse(Arima5model)
-getrmse(Arima4model)
-# Not working
+## DONE UP
+
 # h) You can also use the auto.arima() function with some of its parameters fixed, to
 # see if it suggests a better model that the one you have found. Don't trust blindly
 # its output. Automatic found models aren't based on an analysis of residuals but in
 # comparing some other measures like AIC. Depending on how complex the data set
 # is, they may find models with high values for p, q, P or Q (greater than 2).
 
-ts1.auto = auto.arima(ts1.train)
-ts1.auto
-tsdiag(ts1.auto)
-fc6 = forecast(ts1.auto, h = 24)
-plot(fc6)
-accuracy(fc6, ts1.test)
+automatic_arima_model <- auto.arima(time_series_train_split)
+automatic_arima_model
+
+tsdiag(automatic_arima_model)
+
+forecast_automatic_arima_model <- forecast(automatic_arima_model, h = 24)
+plot(forecast_automatic_arima_model)
+accuracy(forecast_automatic_arima_model, time_series_test_split)
 # This automated model is worse in the RMSE than the one manually tuned, since
 # It is tuned based on other parameters like Akaike's information cryterion,
 # instead on the residuals
 
-Box.test(ts1.auto$residuals, 12, fitdf = 1)
-t.test(ts1.auto$residuals)
-jarque.bera.test(ts1.auto$residuals[-c(49, 72, 73, 37, 77)])
+Box.test(automatic_arima_model$residuals, 12, fitdf = 1)
+t.test(automatic_arima_model$residuals)
+jarque.bera.test(automatic_arima_model$residuals[-c(49, 72, 73, 37, 77)])
 
 # The spectrum of the residuals:s
-tsdisplay(ts1.auto$residuals, plot.type = "spectrum")
+tsdisplay(automatic_arima_model$residuals, plot.type = "spectrum")
