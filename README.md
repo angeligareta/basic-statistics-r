@@ -11,6 +11,9 @@
 This project aims to calculate the subsidized housing approvals (in last twelve months, observation at the end of the period) as % of total. The input [dataset](dataset/data_g15.xlsx) consists of monthly time series from January 1990 to December 2007. The first column contains the date of each observation and the
 second is the time series to analyze. Source [Banco de España](www.bde.es)
 
+## Implementation
+Several R packages were used for the implementation, such as "tseries", "ggplot2", "forecast"... The code was carefully documented explaining every output and can be found at [main.R](src/main.R).
+
 ## Authors
 - Angel Igareta [angel@igareta.com](mailto:angel@igareta.com) 
 - Miguel Perez Mateo
