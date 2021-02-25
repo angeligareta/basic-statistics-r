@@ -1,19 +1,22 @@
-<h1 align="center">Time Series Analysis using R</h1>
+<h1 align="center">Statistics 101 using R</h1>
 <h4 align="center">Repository for the Statistical Data Analysis course of the EIT Digital data science master at <a href="https://www.upm.es/">UPM</a></h4>
 
 <p align="center">
   <img alt="UPM" src="https://img.shields.io/badge/EIT%20Digital-UPM-blue?style=flat-square">
-  <img alt="License" src="https://img.shields.io/github/license/angeligareta/time-series-analysis-r?style=flat-square" />
-  <img alt="GitHub contributors" src="https://img.shields.io/github/contributors/angeligareta/time-series-analysis-r?style=flat-square">
+  <img alt="License" src="https://img.shields.io/github/license/angeligareta/
+basic-statistics-r?style=flat-square" />
+  <img alt="GitHub contributors" src="https://img.shields.io/github/contributors/angeligareta/
+basic-statistics-r?style=flat-square">
 </p>
 
-## Aim
-This project aims to calculate the subsidized housing approvals (in last twelve months, observation at the end of the period) as % of total. The input [dataset](dataset/data_g15.xlsx) consists of monthly time series from January 1990 to December 2007. The first column contains the date of each observation and the
-second is the time series to analyze. Source [Banco de España](www.bde.es)
+## Assignments
 
-## Implementation
-Several R packages were used for the implementation, such as "tseries", "ggplot2", "forecast"... The code was carefully documented explaining every output and can be found at [main.R](src/main.R).
+- [Statistical Analysis](assignment-1): aims to perform a in-depth stastical analysis over a dataset about the relations between socio-economic information and suicide rates by year and country.
+- [Multiple Linear Regression](assignment-2): the goal is to answer a set of questions regarding the creation of regression models for the prediction of diamonds price.
+- [Time Series](assignment-3): analyze a specific time series and fit an ARIMA model following the Box-Jenkins Methodology.
 
 ## Authors
-- Angel Igareta [angel@igareta.com](mailto:angel@igareta.com) 
+
 - Miguel Perez Mateo
+- Junhui Liang
+- Angel Igareta [angel@igareta.com](mailto:angel@igareta.com)
