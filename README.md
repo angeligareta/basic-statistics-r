@@ -3,10 +3,8 @@
 
 <p align="center">
   <img alt="UPM" src="https://img.shields.io/badge/EIT%20Digital-UPM-blue?style=flat-square">
-  <img alt="License" src="https://img.shields.io/github/license/angeligareta/
-basic-statistics-r?style=flat-square" />
-  <img alt="GitHub contributors" src="https://img.shields.io/github/contributors/angeligareta/
-basic-statistics-r?style=flat-square">
+  <img alt="License" src="https://img.shields.io/github/license/angeligareta/basic-statistics-r?style=flat-square" />
+  <img alt="GitHub contributors" src="https://img.shields.io/github/contributors/angeligareta/basic-statistics-r?style=flat-square">
 </p>
 
 ## Assignments
